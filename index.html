@@ -1,175 +1,124 @@
 <!DOCTYPE html>
-<html lang="ru" class="dark">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M3U IPTV & VLESS Stream Viewer</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            50: '#f0f6ff',
-                            100: '#e0edff',
-                            500: '#3b82f6',
-                            600: '#2563eb',
-                            700: '#1d4ed8',
-                            900: '#1e3a8a',
-                        },
-                        dark: {
-                            bg: '#0f172a',
-                            card: '#1e293b',
-                            border: '#334155',
-                            accent: '#64748b'
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- HLS.js for IPTV streaming -->
+    <title>M3U & VLESS Stream Viewer</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
-        /* Custom scrollbars */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --accent: #3b82f6;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --border: #334155;
         }
-        ::-webkit-scrollbar-track {
-            background: #0f172a;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #334155;
-            border-radius: 3px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #475569;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+        body { background: var(--bg); color: var(--text); padding: 1rem; min-height: 100vh; }
+        h1 { font-size: 1.2rem; margin-bottom: 1rem; text-align: center; color: var(--accent); }
+        .grid { display: grid; grid-template-columns: 1fr; gap: 1rem; max-width: 1200px; margin: 0 auto; }
+        @media (min-width: 768px) { .grid { grid-template-columns: 320px 1fr; } }
+        .box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+        textarea, input { width: 100%; background: #0f172a; border: 1px solid var(--border); color: var(--text); padding: 0.6rem; border-radius: 6px; margin-bottom: 0.5rem; }
+        button { width: 100%; background: var(--accent); color: white; border: none; padding: 0.6rem; border-radius: 6px; font-weight: bold; cursor: pointer; margin-bottom: 0.5rem; }
+        .list { max-height: 350px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.4rem; }
+        .item { padding: 0.6rem; background: #0f172a; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+        .item:hover, .item.active { border-color: var(--accent); background: rgba(59,130,246,0.2); }
+        video { width: 100%; aspect-ratio: 16/9; background: black; border-radius: 6px; }
+        .vless { background: #0f172a; padding: 0.5rem; font-size: 0.75rem; word-break: break-all; color: var(--muted); border-radius: 6px; margin-top: 0.5rem; }
     </style>
 </head>
-<body class="bg-dark-bg text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-brand-500 selection:text-white">
+<body>
+    <h1>📺 M3U & VLESS Плеер</h1>
+    <div class="grid">
+        <div class="box">
+            <textarea id="m3uText" rows="4" placeholder="Вставьте текст M3U плейлиста..."></textarea>
+            <input type="file" id="m3uFile" accept=".m3u,.m3u8">
+            <button onclick="parseM3U()">Загрузить список</button>
+            <input type="text" id="search" placeholder="Поиск..." oninput="render()">
+            <div class="list" id="list"></div>
+        </div>
 
-    <!-- Header Navigation -->
-    <header class="border-b border-dark-border bg-dark-card/80 backdrop-blur-md sticky top-0 z-40">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <div class="p-2 bg-brand-600 rounded-xl shadow-lg shadow-brand-500/20 text-white">
-                    <i data-lucide="tv" class="w-6 h-6"></i>
-                </div>
-                <div>
-                    <h1 class="text-lg font-bold leading-tight bg-gradient-to-r from-white via-slate-200 to-brand-500 bg-clip-text text-transparent">
-                        IPTV & VLESS Player
-                    </h1>
-                    <p class="text-xs text-slate-400">Просмотрщик M3U плейлистов с поддержкой VLESS</p>
-                </div>
-            </div>
-
-            <div class="flex items-center space-x-3">
-                <button id="btn-open-settings" class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-dark-border flex items-center space-x-2 transition">
-                    <i data-lucide="settings" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Настройки VLESS / CORS</span>
-                </button>
-                <button id="btn-open-modal" class="px-4 py-2 text-xs font-semibold rounded-lg bg-brand-600 hover:bg-brand-500 text-white shadow-md shadow-brand-600/30 flex items-center space-x-2 transition">
-                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
-                    <span>Загрузить M3U</span>
-                </button>
+        <div class="box">
+            <h3 id="title">Выберите канал из списка</h3>
+            <video id="player" controls autoplay style="margin-top:0.5rem;"></video>
+            <div style="margin-top: 1rem;">
+                <label style="font-size:0.8rem; color:var(--muted)">Конфигурация VLESS (для внешних плееров):</label>
+                <div class="vless" id="vlessStr">vless://dfad3077-deac-4540-af47-bf5c3e03e100@n-11.argent-projects.com:443?flow=xtls-rprx-vision&encryption=none&security=reality&sni=n-11.argent-projects.com&fp=firefox&pbk=NhuhzBJjXNjHL_p8X5CYDoZdSbMCEuu-uuH2a4O7HCE&sid=5845170b2d456172&type=tcp&headerType=none#%F0%9F%87%B3%F0%9F%87%B1%D0%9D%D0%B8%D0%B4%D0%B5%D1%80%D0%BB%D0%B0%D0%BD%D0%B4%D1%8B%20(gemini)</div>
+                <button style="margin-top:0.5rem; background:#334155" onclick="copyVless()">Скопировать VLESS</button>
             </div>
         </div>
-    </header>
+    </div>
 
-    <!-- Main Content Area -->
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <script>
+        let channels = [];
+        let hls = null;
 
-        <!-- Left Column: Player & Active Stream Info -->
-        <section class="lg:col-span-7 flex flex-col space-y-4">
-            <!-- Video Player Container -->
-            <div class="relative bg-black rounded-2xl overflow-hidden shadow-2xl border border-dark-border aspect-video flex items-center justify-center group">
-                <video id="video-player" class="w-full h-full object-contain" controls autoplay></video>
-                
-                <!-- Overlay Status Message -->
-                <div id="player-status" class="absolute inset-0 bg-dark-bg/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center space-y-3">
-                    <div class="p-4 bg-slate-800/80 rounded-full text-brand-500">
-                        <i data-lucide="play-circle" class="w-12 h-12"></i>
-                    </div>
-                    <h3 id="status-title" class="text-lg font-semibold text-white">Выберите канал для воспроизведения</h3>
-                    <p id="status-desc" class="text-sm text-slate-400 max-w-md">Загрузите плейлист M3U и выберите желаемый телеканал или трансляцию из списка справа.</p>
-                    <div id="proxy-warning" class="hidden mt-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-300 text-xs max-w-md text-left">
-                        <div class="flex items-start space-x-2">
-                            <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-400 shrink-0 mt-0.5"></i>
-                            <div>
-                                <span class="font-bold">Прямой протокол VLESS:</span> Браузеры не могут воспроизводить ссылки <code>vless://</code> напрямую без локального ретранслятора/прокси (например, Sing-Box / Xray / 3X-UI). Воспользуйтесь кнопкой копирования для экспортных плееров (VLC, v2rayN) или настройте веб-реле.
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        document.getElementById('m3uFile').onchange = (e) => {
+            const f = e.target.files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = (ev) => { document.getElementById('m3uText').value = ev.target.result; parseM3U(); };
+            r.readAsText(f);
+        };
 
-            <!-- Active Channel Details Card -->
-            <div id="channel-card" class="bg-dark-card border border-dark-border rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div class="flex items-center space-x-4">
-                    <img id="active-logo" src="https://placehold.co/64x64/1e293b/64748b?text=TV" alt="Logo" class="w-12 h-12 rounded-lg object-contain bg-slate-900 border border-dark-border p-1">
-                    <div>
-                        <div class="flex items-center space-x-2">
-                            <h2 id="active-title" class="font-bold text-white text-base">Канал не выбран</h2>
-                            <span id="active-group" class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-slate-800 text-slate-400 rounded">M3U</span>
-                        </div>
-                        <p id="active-url-display" class="text-xs text-slate-400 truncate max-w-xs sm:max-w-md mt-0.5">URL появится после выбора</p>
-                    </div>
-                </div>
+        function parseM3U() {
+            const txt = document.getElementById('m3uText').value;
+            channels = [];
+            let name = "Канал";
+            txt.split('\n').forEach(line => {
+                line = line.trim();
+                if (line.startsWith('#EXTINF:')) {
+                    const p = line.split(',');
+                    if (p.length > 1) name = p[p.length - 1].trim();
+                } else if (line && !line.startsWith('#')) {
+                    channels.push({ name, url: line });
+                    name = "Канал";
+                }
+            });
+            render();
+        }
 
-                <!-- Stream Mode Switcher -->
-                <div class="flex items-center bg-slate-900/80 p-1 rounded-lg border border-dark-border w-full sm:w-auto justify-center">
-                    <button id="mode-direct" class="flex-1 sm:flex-none px-3 py-1.5 text-xs font-semibold rounded-md transition bg-brand-600 text-white flex items-center justify-center space-x-1.5">
-                        <i data-lucide="globe" class="w-3.5 h-3.5"></i>
-                        <span>Обычный</span>
-                    </button>
-                    <button id="mode-proxy" class="flex-1 sm:flex-none px-3 py-1.5 text-xs font-semibold rounded-md transition text-slate-400 hover:text-white flex items-center justify-center space-x-1.5">
-                        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
-                        <span>VLESS / Прокси</span>
-                    </button>
-                </div>
-            </div>
+        function render() {
+            const q = document.getElementById('search').value.toLowerCase();
+            const listEl = document.getElementById('list');
+            listEl.innerHTML = '';
+            channels.filter(c => c.name.toLowerCase().includes(q)).forEach((c, i) => {
+                const div = document.createElement('div');
+                div.className = 'item';
+                div.innerText = c.name;
+                div.onclick = () => play(c, div);
+                listEl.appendChild(div);
+            });
+        }
 
-            <!-- Quick Export Tools -->
-            <div class="grid grid-cols-2 gap-3">
-                <button id="btn-copy-direct" class="p-3 bg-dark-card border border-dark-border hover:border-slate-600 rounded-xl flex items-center justify-center space-x-2 text-xs font-medium text-slate-300 transition">
-                    <i data-lucide="copy" class="w-4 h-4 text-brand-500"></i>
-                    <span>Копировать Direct URL</span>
-                </button>
-                <button id="btn-copy-vless" class="p-3 bg-dark-card border border-dark-border hover:border-slate-600 rounded-xl flex items-center justify-center space-x-2 text-xs font-medium text-slate-300 transition">
-                    <i data-lucide="share-2" class="w-4 h-4 text-purple-400"></i>
-                    <span>Копировать VLESS Ссылку</span>
-                </button>
-            </div>
-        </section>
+        function play(ch, el) {
+            document.querySelectorAll('.item').forEach(i => i.classList.remove('active'));
+            if (el) el.classList.add('active');
+            document.getElementById('title').innerText = ch.name;
+            
+            const video = document.getElementById('player');
+            if (Hls.isSupported() && ch.url.includes('.m3u8')) {
+                if (hls) hls.destroy();
+                hls = new Hls();
+                hls.loadSource(ch.url);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+            } else {
+                video.src = ch.url;
+                video.play().catch(() => {});
+            }
+        }
 
-        <!-- Right Column: Playlist Browser -->
-        <section class="lg:col-span-5 flex flex-col space-y-4">
-            <!-- Search & Filters -->
-            <div class="bg-dark-card border border-dark-border rounded-xl p-3 space-y-3">
-                <div class="relative">
-                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"></i>
-                    <input type="text" id="search-input" placeholder="Поиск по названию канала..." class="w-full pl-9 pr-4 py-2 bg-slate-900 border border-dark-border rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-brand-500">
-                </div>
-
-                <div class="flex items-center justify-between text-xs">
-                    <select id="category-filter" class="bg-slate-900 border border-dark-border text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-brand-500 max-w-[180px]">
-                        <option value="ALL">Все категории (0)</option>
-                    </select>
-
-                    <span id="channel-count" class="text-slate-500 font-medium">Каналов: 0</span>
-                </div>
-            </div>
-
-            <!-- Channel List Scroll Container -->
-            <div class="bg-dark-card border border-dark-border rounded-xl flex-1 min-h-[400px] max-h-[600px] overflow-y-auto p-2 space-y-1.5" id="channel-list">
-                <!-- Empty State -->
+        function copyVless() {
+            navigator.clipboard.writeText(document.getElementById('vlessStr').innerText);
+            alert('Скопировано!');
+        }
+    </script>
+</body>
+</html>
+pty State -->
                 <div id="empty-state" class="h-full flex flex-col items-center justify-center text-center p-8 space-y-3 text-slate-500">
                     <i data-lucide="list-video" class="w-10 h-10 stroke-1"></i>
                     <p class="text-xs">Плейлист не загружен.<br>Нажмите «Загрузить M3U», чтобы добавить каналы.</p>
